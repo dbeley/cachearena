@@ -40,23 +40,15 @@ cp -r "$EXTENSION_DIR"/* "$TEMP_BUILD_DIR/"
 # Firefox .xpi (signed package)
 echo "Creating Firefox .xpi package..."
 cd "$TEMP_BUILD_DIR"
-zip -r -FS "../cachearena-$VERSION.xpi" \
-  manifest.json \
-  background.js \
-  content/ \
-  shared/ \
-  -x "*.git*" "*.DS_Store" "*~"
+zip -r -FS "../cachearena-$VERSION.xpi" . \
+  -x "web-ext-artifacts/*" "*.git*" "*.DS_Store" "*~"
 cd ../..
 
 # Chrome .zip (for manual installation in developer mode)
 echo "Creating Chrome .zip package..."
 cd "$TEMP_BUILD_DIR"
-zip -r -FS "../cachearena-$VERSION-chrome.zip" \
-  manifest.json \
-  background.js \
-  content/ \
-  shared/ \
-  -x "*.git*" "*.DS_Store" "*~"
+zip -r -FS "../cachearena-$VERSION-chrome.zip" . \
+  -x "web-ext-artifacts/*" "*.git*" "*.DS_Store" "*~"
 cd ../..
 
 # Clean up temp directory
