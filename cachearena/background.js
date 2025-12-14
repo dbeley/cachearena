@@ -19,6 +19,43 @@
 
   const CACHE_KEY = "gsmarena-cache-v1";
   const SETTINGS_KEY = "gsmarena-settings";
+  const CSV_FIELDS = [
+    "mediaType",
+    "sourceId",
+    "slug",
+    "brand",
+    "model",
+    "announced",
+    "status",
+    "dimensions",
+    "weight",
+    "build",
+    "sim",
+    "displayType",
+    "displaySize",
+    "displayResolution",
+    "os",
+    "chipset",
+    "memory",
+    "mainCamera",
+    "selfieCamera",
+    "battery",
+    "charging",
+    "colors",
+    "price",
+    "image",
+    "url",
+    "updatedAt",
+    "firstSeen",
+  ];
+  const DATA_FIELDS = CSV_FIELDS.filter(
+    (field) => !["mediaType", "sourceId", "slug", "updatedAt", "firstSeen"].includes(field),
+  );
+  const storage = {
+    get: (key) => new Promise((resolve) => browser.storage.local.get(key, resolve)),
+    set: (values) => new Promise((resolve) => browser.storage.local.set(values, resolve)),
+    remove: (key) => new Promise((resolve) => browser.storage.local.remove(key, resolve)),
+  };
   let cache = null;
   let settingsCache = null;
 
@@ -105,13 +142,9 @@
   });
 
   async function seedDefaults() {
-    const stored = await new Promise((resolve) => {
-      browser.storage.local.get(SETTINGS_KEY, resolve);
-    });
+    const stored = await storage.get(SETTINGS_KEY);
     if (!stored[SETTINGS_KEY]) {
-      await new Promise((resolve) => {
-        browser.storage.local.set({ [SETTINGS_KEY]: DEFAULT_SETTINGS }, resolve);
-      });
+      await storage.set({ [SETTINGS_KEY]: DEFAULT_SETTINGS });
     }
   }
 
@@ -135,9 +168,7 @@
       source: meta.source,
     };
     cache = next;
-    await new Promise((resolve) => {
-      browser.storage.local.set({ [CACHE_KEY]: next }, resolve);
-    });
+    await storage.set({ [CACHE_KEY]: next });
     console.debug("[gsmarena-cache][bg] cache updated successfully", {
       mediaType: meta.mediaType,
       count: normalizedRecords.length,
@@ -157,9 +188,7 @@
   }
 
   async function handleCacheClear() {
-    await new Promise((resolve) => {
-      browser.storage.local.remove(CACHE_KEY, resolve);
-    });
+    await storage.remove(CACHE_KEY);
     cache = null;
     console.debug("[gsmarena-cache][bg] cache cleared successfully");
     return { ok: true };
@@ -167,9 +196,7 @@
 
   async function loadSettings() {
     if (settingsCache) return settingsCache;
-    const stored = await new Promise((resolve) => {
-      browser.storage.local.get(SETTINGS_KEY, resolve);
-    });
+    const stored = await storage.get(SETTINGS_KEY);
     settingsCache = { ...DEFAULT_SETTINGS, ...(stored[SETTINGS_KEY] || {}) };
     return settingsCache;
   }
@@ -180,25 +207,19 @@
       sources: { ...current.sources, ...(next.sources || {}) },
     };
     settingsCache = merged;
-    await new Promise((resolve) => {
-      browser.storage.local.set({ [SETTINGS_KEY]: merged }, resolve);
-    });
+    await storage.set({ [SETTINGS_KEY]: merged });
     return merged;
   }
 
   async function loadCache() {
     if (cache) return cache;
-    const stored = await new Promise((resolve) => {
-      browser.storage.local.get(CACHE_KEY, resolve);
-    });
+    const stored = await storage.get(CACHE_KEY);
     cache = stored[CACHE_KEY] || null;
     return cache;
   }
 
   function normalizeRecords(input, meta) {
-    const entries = Array.isArray(input)
-      ? input.filter(Boolean)
-      : Object.values(input || {}).filter(Boolean);
+    const entries = toEntryList(input);
     return entries.map((entry) => normalizeEntry(entry, meta));
   }
 
@@ -206,47 +227,31 @@
     const mediaType = meta.mediaType || "phone";
     const sourceId = meta.source || "unknown";
     const slug = entry.slug || entry.id || `${mediaType}-${entry.model || "unknown"}`;
-    return {
+    const timestamp = new Date().toISOString();
+    const normalized = {
       mediaType,
       sourceId,
       slug,
-      brand: entry.brand || "",
-      model: entry.model || "",
-      announced: entry.announced || "",
-      status: entry.status || "",
-      dimensions: entry.dimensions || "",
-      weight: entry.weight || "",
-      build: entry.build || "",
-      sim: entry.sim || "",
-      displayType: entry.displayType || "",
-      displaySize: entry.displaySize || "",
-      displayResolution: entry.displayResolution || "",
-      os: entry.os || "",
-      chipset: entry.chipset || "",
-      memory: entry.memory || "",
-      mainCamera: entry.mainCamera || "",
-      selfieCamera: entry.selfieCamera || "",
-      battery: entry.battery || "",
-      charging: entry.charging || "",
-      colors: entry.colors || "",
-      price: entry.price || "",
-      image: entry.image || "",
-      url: entry.url || "",
-      updatedAt: entry.updatedAt || new Date().toISOString(),
-      firstSeen: entry.firstSeen || entry.updatedAt || new Date().toISOString(),
+      updatedAt: entry.updatedAt || timestamp,
+      firstSeen: entry.firstSeen || entry.updatedAt || timestamp,
     };
+
+    for (const field of DATA_FIELDS) {
+      normalized[field] = entry[field] || "";
+    }
+    return normalized;
   }
 
   function mergeRecords(existingEntries, incomingEntries) {
     const byKey = new Map();
 
     for (const entry of existingEntries) {
-      const key = `${entry.mediaType}::${entry.slug}`;
+      const key = recordKey(entry);
       byKey.set(key, entry);
     }
 
     for (const entry of incomingEntries) {
-      const key = `${entry.mediaType}::${entry.slug}`;
+      const key = recordKey(entry);
       const existing = byKey.get(key);
       if (!existing) {
         byKey.set(key, entry);
@@ -261,6 +266,15 @@
     }
 
     return Array.from(byKey.values());
+  }
+
+  function toEntryList(input) {
+    if (!input) return [];
+    return (Array.isArray(input) ? input : Object.values(input)).filter(Boolean);
+  }
+
+  function recordKey(entry) {
+    return `${entry.mediaType}::${entry.slug}`;
   }
 
   function indexRecords(entries) {
@@ -285,39 +299,9 @@
 
   function buildCsv(entries) {
     if (!entries || entries.length === 0) return "";
-    const header = [
-      "mediaType",
-      "sourceId",
-      "slug",
-      "brand",
-      "model",
-      "announced",
-      "status",
-      "dimensions",
-      "weight",
-      "build",
-      "sim",
-      "displayType",
-      "displaySize",
-      "displayResolution",
-      "os",
-      "chipset",
-      "memory",
-      "mainCamera",
-      "selfieCamera",
-      "battery",
-      "charging",
-      "colors",
-      "price",
-      "image",
-      "url",
-      "updatedAt",
-      "firstSeen",
-    ];
-
-    const lines = [header.join(",")];
+    const lines = [CSV_FIELDS.join(",")];
     for (const entry of entries) {
-      const row = header.map((field) => escapeCsv(entry[field] === undefined ? "" : entry[field]));
+      const row = CSV_FIELDS.map((field) => escapeCsv(entry[field] === undefined ? "" : entry[field]));
       lines.push(row.join(","));
     }
     return lines.join("\n");

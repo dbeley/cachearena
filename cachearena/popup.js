@@ -1,5 +1,7 @@
 (function () {
   const browser = globalThis.browser || globalThis.chrome;
+  const api = globalThis.__GSMARENA_EXT__ || {};
+  const sendMessage = api.sendMessage || fallbackSendMessage;
 
   const phoneCountEl = document.getElementById("phone-count");
   const lastSyncEl = document.getElementById("last-sync");
@@ -83,7 +85,7 @@
     }
   }
 
-  function sendMessage(message) {
+  function fallbackSendMessage(message) {
     return new Promise((resolve, reject) => {
       browser.runtime.sendMessage(message, (response) => {
         if (browser.runtime.lastError) {
