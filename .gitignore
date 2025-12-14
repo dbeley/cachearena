@@ -1,0 +1,17 @@
+rym-html-examples/
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+build/
+*.xpi
+*.zip
+.amo-upload-uuid
+
+# direnv
+.direnv/
+.envrc.cache
+
+.claude

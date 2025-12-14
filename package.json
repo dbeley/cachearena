@@ -1,0 +1,20 @@
+{
+  "name": "cachearena",
+  "version": "0.1.0",
+  "description": "GSMArena Cache browser extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "./build-extension.sh"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.4",
+    "web-ext": "^9.2.0"
+  }
+}

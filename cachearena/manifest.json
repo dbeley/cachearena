@@ -1,0 +1,54 @@
+{
+  "manifest_version": 2,
+  "name": "CacheArena",
+  "version": "0.1.0",
+  "description": "An add-on to cache phone specifications from GSMArena.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cachearena@dbeley.ovh"
+    }
+  },
+  "permissions": [
+    "storage",
+    "http://gsmarena.com/*",
+    "https://gsmarena.com/*",
+    "https://www.gsmarena.com/*",
+    "http://www.gsmarena.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_title": "CacheArena",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gsmarena.com/*",
+        "http://gsmarena.com/*",
+        "https://www.gsmarena.com/*",
+        "http://www.gsmarena.com/*"
+      ],
+      "js": [
+        "shared/normalize.js",
+        "shared/config.js",
+        "shared/runtime-utils.js",
+        "shared/async-utils.js",
+        "shared/dom-utils.js",
+        "content/data-sync.js",
+        "content/data-extract.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    "content/data-sync.js",
+    "shared/normalize.js",
+    "shared/config.js",
+    "shared/async-utils.js",
+    "shared/runtime-utils.js",
+    "shared/dom-utils.js"
+  ]
+}

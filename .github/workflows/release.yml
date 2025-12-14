@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches manifest
+        run: |
+          MANIFEST_VERSION=$(grep -oP '"version":\s*"\K[^"]+' cachearena/manifest.json)
+          if [ "$MANIFEST_VERSION" != "${{ steps.version.outputs.VERSION }}" ]; then
+            echo "Error: Tag version (${{ steps.version.outputs.VERSION }}) doesn't match manifest.json version ($MANIFEST_VERSION)"
+            exit 1
+          fi
+
+      - name: Build extension
+        run: |
+          chmod +x build-extension.sh
+          ./build-extension.sh
+
+      - name: Sign Firefox XPI
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+        run: |
+          npx web-ext sign \
+            --source-dir=cachearena \
+            --channel=unlisted \
+            --artifacts-dir=build/signed
+
+          # Replace unsigned XPI with signed version
+          SIGNED_XPI=$(ls build/signed/*.xpi)
+          mv "$SIGNED_XPI" "build/cachearena-${{ steps.version.outputs.VERSION }}.xpi"
+          rm -rf build/signed
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## CacheArena v${{ steps.version.outputs.VERSION }}
+
+            ### Installation
+
+            **Firefox:**
+            - Download `cachearena-${{ steps.version.outputs.VERSION }}.xpi` (signed by Mozilla)
+            - Open the downloaded file with Firefox, or drag and drop it onto Firefox
+            - Click "Add" when prompted
+
+            **Chrome:**
+            - Download `cachearena-${{ steps.version.outputs.VERSION }}-chrome.zip`
+            - Extract and load as unpacked extension in developer mode
+
+            ### What's Changed
+            <!-- Add your changelog here -->
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/commits/v${{ steps.version.outputs.VERSION }}
+          files: |
+            ./build/cachearena-${{ steps.version.outputs.VERSION }}.xpi
+            ./build/cachearenacachearena${{ steps.version.outputs.VERSION }}-chrome.zip
+          draft: false
+          prerelease: false
