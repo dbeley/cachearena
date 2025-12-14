@@ -344,6 +344,10 @@
     return !!(browser && browser.downloads && typeof browser.downloads.download === "function");
   }
 
+  function shouldPromptForDownload() {
+    return !!(browser && browser.runtime && typeof browser.runtime.getBrowserInfo === "function");
+  }
+
   function triggerDownload(url, filename) {
     return new Promise((resolve, reject) => {
       try {
@@ -351,7 +355,8 @@
           {
             url,
             filename,
-            saveAs: false,
+            // Firefox honors the user's "always ask" preference only when saveAs is true
+            saveAs: shouldPromptForDownload(),
           },
           (downloadId) => {
             if (browser.runtime.lastError) {
