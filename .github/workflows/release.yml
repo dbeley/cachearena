@@ -79,6 +79,6 @@ jobs:
             **Full Changelog**: https://github.com/${{ github.repository }}/commits/v${{ steps.version.outputs.VERSION }}
           files: |
             ./build/cachearena-${{ steps.version.outputs.VERSION }}.xpi
-            ./build/cachearenacachearena${{ steps.version.outputs.VERSION }}-chrome.zip
+            ./build/cachearena-${{ steps.version.outputs.VERSION }}-chrome.zip
           draft: false
           prerelease: false
