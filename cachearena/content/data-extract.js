@@ -135,7 +135,10 @@
 
     function flush() {
       if (buffer.length === 0) return;
-      const value = buffer.join(" ").replace(/^\u00b7\s*/, "").trim();
+      const value = buffer
+        .join(" ")
+        .replace(/^\u00b7\s*/, "")
+        .trim();
       if (value) parts.push(value);
       buffer = [];
     }

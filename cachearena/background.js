@@ -49,7 +49,7 @@
     "firstSeen",
   ];
   const DATA_FIELDS = CSV_FIELDS.filter(
-    (field) => !["mediaType", "sourceId", "slug", "updatedAt", "firstSeen"].includes(field),
+    (field) => !["mediaType", "sourceId", "slug", "updatedAt", "firstSeen"].includes(field)
   );
   const storage = {
     get: (key) => new Promise((resolve) => browser.storage.local.get(key, resolve)),
@@ -334,7 +334,9 @@
     if (!entries || entries.length === 0) return "";
     const lines = [CSV_FIELDS.join(",")];
     for (const entry of entries) {
-      const row = CSV_FIELDS.map((field) => escapeCsv(entry[field] === undefined ? "" : entry[field]));
+      const row = CSV_FIELDS.map((field) =>
+        escapeCsv(entry[field] === undefined ? "" : entry[field])
+      );
       lines.push(row.join(","));
     }
     return lines.join("\n");
@@ -364,7 +366,7 @@
               return;
             }
             resolve(downloadId);
-          },
+          }
         );
 
         if (maybePromise && typeof maybePromise.then === "function") {
