@@ -39,12 +39,6 @@ The extension provides functionality to export your cached data as CSV (accessib
 
 ## Development
 
-### Requirements
-
-- Node.js 22+
-- npm
-- Firefox or Chrome browser
-
 ### Build
 
 ```bash
@@ -61,17 +55,3 @@ Load the extension temporarily in Firefox:
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
 3. Select `cachearena/manifest.json`
-
-Or use web-ext for live reload:
-
-```bash
-web-ext run --source-dir cachearena
-```
-
-## Contributing
-
-Contributions are welcome! Feel free to:
-
-- Report bugs
-- Suggest new features
-- Improve documentation
