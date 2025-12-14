@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "CacheArena",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An add-on to cache phone specifications from GSMArena.",
   "browser_specific_settings": {
     "gecko": {
