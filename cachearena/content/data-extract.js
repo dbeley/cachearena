@@ -80,7 +80,7 @@
     record.dimensions = getSpec("dimensions");
     record.weight = getSpec("weight");
     record.build = getSpec("build");
-    record.sim = getSpec("sim");
+    record.sim = getMultiSpec("sim");
 
     // Display
     record.displayType = getSpec("displaytype");
@@ -102,7 +102,7 @@
 
     // Battery
     record.battery = getSpec("batdescription1") || getSpec("batsize-hl");
-    record.charging = getSpec("battype-hl");
+    record.charging = extractCharging();
 
     // Misc
     record.colors = getSpec("colors");
@@ -119,5 +119,77 @@
     const el = document.querySelector(`[data-spec="${specName}"]`);
     if (!el) return "";
     return text(el);
+  }
+
+  function getMultiSpec(specName) {
+    const el = document.querySelector(`[data-spec="${specName}"]`);
+    if (!el) return "";
+    const parts = collectSpecParts(el);
+    if (parts.length === 0) return text(el);
+    return parts.join("; ");
+  }
+
+  function collectSpecParts(root) {
+    const parts = [];
+    let buffer = [];
+
+    function flush() {
+      if (buffer.length === 0) return;
+      const value = buffer.join(" ").replace(/^\u00b7\s*/, "").trim();
+      if (value) parts.push(value);
+      buffer = [];
+    }
+
+    function walk(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName;
+        if (tag === "HR" || tag === "BR") {
+          flush();
+          return;
+        }
+        for (const child of node.childNodes) {
+          walk(child);
+        }
+        return;
+      }
+      const value = text(node);
+      if (value) buffer.push(value);
+    }
+
+    walk(root);
+    flush();
+    return parts;
+  }
+
+  function extractCharging() {
+    const el = document.querySelector('[data-spec="battype-hl"]');
+    if (!el) return "";
+
+    const parts = [];
+    let currentLabel = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "I") {
+        currentLabel = chargingLabelFrom(node.className || "");
+        continue;
+      }
+      const value = text(node);
+      if (!value) continue;
+      if (currentLabel) {
+        parts.push(`${value} ${currentLabel}`);
+        currentLabel = "";
+      } else {
+        parts.push(value);
+      }
+    }
+
+    const formatted = parts.join("; ").trim();
+    if (formatted) return formatted;
+    return text(el);
+  }
+
+  function chargingLabelFrom(className) {
+    if (/reverse/i.test(className)) return "reverse wireless";
+    if (/wireless/i.test(className)) return "wireless";
+    return "wired";
   }
 })();
