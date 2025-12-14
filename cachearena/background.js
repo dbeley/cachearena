@@ -123,7 +123,7 @@
         .then(sendResponse)
         .catch((err) => {
           console.error("[gsmarena-cache][bg] export failed", err);
-          sendResponse({ csv: "", count: 0, lastSync: null });
+          sendResponse({ ok: false, error: err.message, count: 0, lastSync: null });
         });
       return true;
     }
@@ -180,10 +180,43 @@
   async function handleExport() {
     const current = await loadCache();
     const entries = current?.entries || [];
+    const lastSync = current?.lastSync || null;
+
+    if (entries.length === 0) {
+      return { ok: false, reason: "empty", count: 0, lastSync };
+    }
+
+    const csv = buildCsv(entries);
+    const filename = `cachearena-export-${Date.now()}.csv`;
+
+    if (hasDownloadsApi()) {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      try {
+        const downloadId = await triggerDownload(url, filename);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        return {
+          ok: true,
+          mode: "downloads",
+          downloadId,
+          filename,
+          count: entries.length,
+          lastSync,
+        };
+      } catch (err) {
+        URL.revokeObjectURL(url);
+        throw err;
+      }
+    }
+
     return {
-      csv: buildCsv(entries),
+      ok: true,
+      mode: "inline",
+      csv,
+      filename,
       count: entries.length,
-      lastSync: current?.lastSync || null,
+      lastSync,
     };
   }
 
@@ -305,5 +338,36 @@
       lines.push(row.join(","));
     }
     return lines.join("\n");
+  }
+
+  function hasDownloadsApi() {
+    return !!(browser && browser.downloads && typeof browser.downloads.download === "function");
+  }
+
+  function triggerDownload(url, filename) {
+    return new Promise((resolve, reject) => {
+      try {
+        const maybePromise = browser.downloads.download(
+          {
+            url,
+            filename,
+            saveAs: false,
+          },
+          (downloadId) => {
+            if (browser.runtime.lastError) {
+              reject(browser.runtime.lastError);
+              return;
+            }
+            resolve(downloadId);
+          },
+        );
+
+        if (maybePromise && typeof maybePromise.then === "function") {
+          maybePromise.then(resolve, reject);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 })();

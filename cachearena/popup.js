@@ -38,24 +38,40 @@
     try {
       const result = await sendMessage({ type: "gsmarena-cache-export" });
 
-      if (!result || !result.csv) {
-        showMessage("No data to export", "error");
+      if (!result || result.ok === false) {
+        if (result?.reason === "empty") {
+          showMessage("No data to export", "error");
+        } else {
+          showMessage("Export failed", "error");
+        }
         exportBtn.disabled = false;
         return;
       }
 
-      // Create and download CSV file
-      const blob = new Blob([result.csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `cachearena-export-${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (result.mode === "inline") {
+        if (!result.csv) {
+          showMessage("No data to export", "error");
+          exportBtn.disabled = false;
+          return;
+        }
 
-      showMessage(`Exported ${result.count} phones`, "success");
+        // Fallback path when downloads API is unavailable
+        const blob = new Blob([result.csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.filename || `cachearena-export-${Date.now()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else if (result.mode !== "downloads") {
+        showMessage("Export failed", "error");
+        exportBtn.disabled = false;
+        return;
+      }
+
+      showMessage(`Exported ${result.count || 0} phones`, "success");
     } catch (err) {
       console.error("Export failed", err);
       showMessage("Export failed: " + err.message, "error");

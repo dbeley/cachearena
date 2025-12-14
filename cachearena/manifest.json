@@ -13,7 +13,8 @@
     "http://gsmarena.com/*",
     "https://gsmarena.com/*",
     "https://www.gsmarena.com/*",
-    "http://www.gsmarena.com/*"
+    "http://www.gsmarena.com/*",
+    "downloads"
   ],
   "background": {
     "scripts": ["background.js"],
