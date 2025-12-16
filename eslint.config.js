@@ -53,6 +53,13 @@ export default [
     },
   },
   {
-    ignores: ["build/", "node_modules/", ".git/", "eslint.config.js", "cachearena/**/*.js"],
+    ignores: [
+      "build/",
+      "node_modules/",
+      ".git/",
+      "eslint.config.js",
+      "cachearena/*.js",
+      "cachearena/content/*.js",
+    ],
   },
 ];

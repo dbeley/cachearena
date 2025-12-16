@@ -12,6 +12,8 @@ import { dirname, join } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const watchMode = process.argv.includes("--watch");
+
 const buildOptions = {
   bundle: true,
   format: "iife",
@@ -21,30 +23,52 @@ const buildOptions = {
   logLevel: "info",
 };
 
+const entryPoints = [
+  {
+    in: join(__dirname, "src/background.ts"),
+    out: join(__dirname, "cachearena/background"),
+  },
+  {
+    in: join(__dirname, "src/popup.ts"),
+    out: join(__dirname, "cachearena/popup"),
+  },
+  {
+    in: join(__dirname, "src/content/data-extract.ts"),
+    out: join(__dirname, "cachearena/content/data-extract"),
+  },
+];
+
 async function build() {
   try {
-    // Background script
-    await esbuild.build({
-      ...buildOptions,
-      entryPoints: [join(__dirname, "src/background.ts")],
-      outfile: join(__dirname, "cachearena/background.js"),
-    });
+    if (watchMode) {
+      console.log("👀 Watch mode enabled...");
+      const contexts = [];
 
-    // Popup script
-    await esbuild.build({
-      ...buildOptions,
-      entryPoints: [join(__dirname, "src/popup.ts")],
-      outfile: join(__dirname, "cachearena/popup.js"),
-    });
+      for (const entry of entryPoints) {
+        const ctx = await esbuild.context({
+          ...buildOptions,
+          entryPoints: [entry.in],
+          outfile: entry.out + ".js",
+        });
+        contexts.push(ctx);
+        await ctx.watch();
+      }
 
-    // Content script
-    await esbuild.build({
-      ...buildOptions,
-      entryPoints: [join(__dirname, "src/content/data-extract.ts")],
-      outfile: join(__dirname, "cachearena/content/data-extract.js"),
-    });
+      console.log("✓ Watching for changes...");
 
-    console.log("✓ Build complete!");
+      // Keep process running
+      await new Promise(() => {});
+    } else {
+      for (const entry of entryPoints) {
+        await esbuild.build({
+          ...buildOptions,
+          entryPoints: [entry.in],
+          outfile: entry.out + ".js",
+        });
+      }
+
+      console.log("✓ Build complete!");
+    }
   } catch (error) {
     console.error("✗ Build failed:", error);
     process.exit(1);
