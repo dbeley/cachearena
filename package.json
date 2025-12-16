@@ -9,12 +9,20 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "compile": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "prebuild": "npm run compile",
     "build": "./build-extension.sh"
   },
   "devDependencies": {
+    "@types/firefox-webext-browser": "^143.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/parser": "^8.50.0",
+    "esbuild": "^0.27.1",
     "eslint": "^9.39.2",
     "globals": "^16.5.0",
     "prettier": "^3.7.4",
+    "typescript": "^5.9.3",
     "web-ext": "^9.2.0"
   }
 }

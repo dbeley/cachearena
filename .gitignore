@@ -10,6 +10,13 @@ build/
 *.zip
 .amo-upload-uuid
 
+# TypeScript
+*.tsbuildinfo
+cachearena/*.js
+cachearena/**/*.js
+cachearena/shared/
+!cachearena/manifest.json
+
 # direnv
 .direnv/
 .envrc.cache

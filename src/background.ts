@@ -1,0 +1,379 @@
+/**
+ * Background script for CacheArena extension
+ * Manages cache storage and data persistence
+ */
+
+import type {
+  PhoneRecord,
+  Cache,
+  Settings,
+  Message,
+  ExportResult,
+  UpdateResult,
+  ClearResult,
+} from "./types";
+import { browserAPI, storage, hasDownloadsApi, triggerDownload } from "./shared/browser-compat";
+import { keyFor } from "./shared/normalize";
+import { DEFAULT_SETTINGS } from "./shared/config";
+
+const CACHE_KEY = "gsmarena-cache-v1";
+const SETTINGS_KEY = "gsmarena-settings";
+
+const CSV_FIELDS = [
+  "mediaType",
+  "sourceId",
+  "slug",
+  "brand",
+  "model",
+  "announced",
+  "status",
+  "dimensions",
+  "weight",
+  "build",
+  "sim",
+  "displayType",
+  "displaySize",
+  "displayResolution",
+  "os",
+  "chipset",
+  "memory",
+  "mainCamera",
+  "selfieCamera",
+  "battery",
+  "charging",
+  "colors",
+  "price",
+  "image",
+  "url",
+  "updatedAt",
+  "firstSeen",
+] as const;
+
+const DATA_FIELDS = CSV_FIELDS.filter(
+  (field) => !["mediaType", "sourceId", "slug", "updatedAt", "firstSeen"].includes(field)
+);
+
+let cache: Cache | null = null;
+let settingsCache: Settings | null = null;
+
+// Initialize extension
+browserAPI.runtime.onInstalled.addListener(seedDefaults);
+
+// Message listener
+browserAPI.runtime.onMessage.addListener(
+  (message: Message, _sender: any, sendResponse: (response: any) => void) => {
+    if (!message || !message.type) {
+      sendResponse(undefined);
+      return;
+    }
+
+    if (message.type === "gsmarena-cache-update") {
+      const source = message.source || "unknown";
+      const mediaType = message.mediaType || "phone";
+      console.debug("[gsmarena-cache][bg] received cache update", {
+        source,
+        mediaType,
+        entries: Array.isArray(message.records) ? message.records.length : 0,
+      });
+      handleCacheUpdate(message.records, { source, mediaType })
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] cache update failed", err);
+          sendResponse({ ok: false, error: err.message });
+        });
+      return true; // Indicates async response
+    }
+
+    if (message.type === "gsmarena-cache-request") {
+      loadCache()
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] cache request failed", err);
+          sendResponse(null);
+        });
+      return true;
+    }
+
+    if (message.type === "gsmarena-settings-get") {
+      loadSettings()
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] settings get failed", err);
+          sendResponse(DEFAULT_SETTINGS);
+        });
+      return true;
+    }
+
+    if (message.type === "gsmarena-settings-set") {
+      saveSettings(message.settings || {})
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] settings set failed", err);
+          sendResponse(null);
+        });
+      return true;
+    }
+
+    if (message.type === "gsmarena-cache-export") {
+      handleExport()
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] export failed", err);
+          sendResponse({ ok: false, error: err.message, count: 0, lastSync: null });
+        });
+      return true;
+    }
+
+    if (message.type === "gsmarena-cache-clear") {
+      handleCacheClear()
+        .then(sendResponse)
+        .catch((err) => {
+          console.error("[gsmarena-cache][bg] cache clear failed", err);
+          sendResponse({ ok: false, error: err.message });
+        });
+      return true;
+    }
+
+    sendResponse(undefined);
+    return false;
+  }
+);
+
+async function seedDefaults(): Promise<void> {
+  const stored = await storage.get<Settings>(SETTINGS_KEY);
+  if (!stored[SETTINGS_KEY]) {
+    await storage.set({ [SETTINGS_KEY]: DEFAULT_SETTINGS });
+  }
+}
+
+async function handleCacheUpdate(
+  records: PhoneRecord[],
+  meta: { source: string; mediaType: string }
+): Promise<UpdateResult> {
+  const settings = await loadSettings();
+  if (settings.sources[meta.mediaType] === false) {
+    console.debug("[gsmarena-cache][bg] skip update because source disabled", {
+      mediaType: meta.mediaType,
+      setting: settings.sources[meta.mediaType],
+    });
+    return { ok: false, skipped: true };
+  }
+
+  const normalizedRecords = normalizeRecords(records || [], meta);
+  const merged = mergeRecords(cache?.entries || [], normalizedRecords);
+  const index = indexRecords(merged);
+  const next: Cache = {
+    entries: merged,
+    index,
+    lastSync: Date.now(),
+    source: meta.source,
+  };
+  cache = next;
+  await storage.set({ [CACHE_KEY]: next });
+  console.debug("[gsmarena-cache][bg] cache updated successfully", {
+    mediaType: meta.mediaType,
+    count: normalizedRecords.length,
+    totalEntries: merged.length,
+  });
+  return { ok: true, count: normalizedRecords.length };
+}
+
+async function handleExport(): Promise<ExportResult> {
+  const current = await loadCache();
+  const entries = current?.entries || [];
+  const lastSync = current?.lastSync || null;
+
+  if (entries.length === 0) {
+    return { ok: false, reason: "empty", count: 0, lastSync };
+  }
+
+  const csv = buildCsv(entries);
+  const filename = `cachearena-export-${Date.now()}.csv`;
+
+  if (hasDownloadsApi()) {
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    try {
+      const downloadId = await triggerDownload(url, filename);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return {
+        ok: true,
+        mode: "downloads",
+        downloadId,
+        filename,
+        count: entries.length,
+        lastSync,
+      };
+    } catch (err) {
+      URL.revokeObjectURL(url);
+      throw err;
+    }
+  }
+
+  return {
+    ok: true,
+    mode: "inline",
+    csv,
+    filename,
+    count: entries.length,
+    lastSync,
+  };
+}
+
+async function handleCacheClear(): Promise<ClearResult> {
+  await storage.remove(CACHE_KEY);
+  cache = null;
+  console.debug("[gsmarena-cache][bg] cache cleared successfully");
+  return { ok: true };
+}
+
+async function loadSettings(): Promise<Settings> {
+  if (settingsCache) return settingsCache;
+  const stored = await storage.get<Settings>(SETTINGS_KEY);
+  settingsCache = { ...DEFAULT_SETTINGS, ...(stored[SETTINGS_KEY] || {}) };
+  return settingsCache;
+}
+
+async function saveSettings(next: Partial<Settings>): Promise<Settings> {
+  const current = await loadSettings();
+  const merged: Settings = {
+    sources: { ...current.sources, ...(next.sources || {}) },
+  };
+  settingsCache = merged;
+  await storage.set({ [SETTINGS_KEY]: merged });
+  return merged;
+}
+
+async function loadCache(): Promise<Cache | null> {
+  if (cache) return cache;
+  const stored = await storage.get<Cache>(CACHE_KEY);
+  cache = stored[CACHE_KEY] || null;
+  return cache;
+}
+
+function normalizeRecords(
+  input: PhoneRecord[],
+  meta: { source: string; mediaType: string }
+): PhoneRecord[] {
+  const entries = toEntryList(input);
+  return entries.map((entry) => normalizeEntry(entry, meta));
+}
+
+function normalizeEntry(
+  entry: Partial<PhoneRecord>,
+  meta: { source: string; mediaType: string }
+): PhoneRecord {
+  const mediaType = meta.mediaType || "phone";
+  const sourceId = meta.source || "unknown";
+  const slug = entry.slug || (entry as any).id || `${mediaType}-${entry.model || "unknown"}`;
+  const timestamp = new Date().toISOString();
+
+  const normalized: PhoneRecord = {
+    mediaType,
+    sourceId,
+    slug,
+    updatedAt: entry.updatedAt || timestamp,
+    firstSeen: entry.firstSeen || entry.updatedAt || timestamp,
+    brand: "",
+    model: "",
+    announced: "",
+    status: "",
+    dimensions: "",
+    weight: "",
+    build: "",
+    sim: "",
+    displayType: "",
+    displaySize: "",
+    displayResolution: "",
+    os: "",
+    chipset: "",
+    memory: "",
+    mainCamera: "",
+    selfieCamera: "",
+    battery: "",
+    charging: "",
+    colors: "",
+    price: "",
+    image: "",
+    url: "",
+  };
+
+  for (const field of DATA_FIELDS) {
+    normalized[field as keyof PhoneRecord] = (entry[field as keyof PhoneRecord] as string) || "";
+  }
+
+  return normalized;
+}
+
+function mergeRecords(
+  existingEntries: PhoneRecord[],
+  incomingEntries: PhoneRecord[]
+): PhoneRecord[] {
+  const byKey = new Map<string, PhoneRecord>();
+
+  for (const entry of existingEntries) {
+    const key = recordKey(entry);
+    byKey.set(key, entry);
+  }
+
+  for (const entry of incomingEntries) {
+    const key = recordKey(entry);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, entry);
+      continue;
+    }
+
+    const merged = {
+      ...existing,
+      ...entry,
+    };
+    byKey.set(key, merged);
+  }
+
+  return Array.from(byKey.values());
+}
+
+function toEntryList(
+  input: PhoneRecord[] | Record<string, PhoneRecord> | null | undefined
+): PhoneRecord[] {
+  if (!input) return [];
+  return (Array.isArray(input) ? input : Object.values(input)).filter(Boolean);
+}
+
+function recordKey(entry: PhoneRecord): string {
+  return `${entry.mediaType}::${entry.slug}`;
+}
+
+function indexRecords(entries: PhoneRecord[]): Record<string, PhoneRecord> {
+  const index: Record<string, PhoneRecord> = {};
+  for (const entry of entries) {
+    const brand = entry.brand || "";
+    const model = entry.model || "";
+    const key = keyFor(brand, model);
+    if (!key.trim()) continue;
+    index[key] = entry;
+  }
+  return index;
+}
+
+function escapeCsv(value: string | number | null | undefined): string {
+  const str = value == null ? "" : String(value);
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function buildCsv(entries: PhoneRecord[]): string {
+  if (!entries || entries.length === 0) return "";
+  const lines = [CSV_FIELDS.join(",")];
+  for (const entry of entries) {
+    const row = CSV_FIELDS.map((field) =>
+      escapeCsv(entry[field] === undefined ? "" : entry[field])
+    );
+    lines.push(row.join(","));
+  }
+  return lines.join("\n");
+}

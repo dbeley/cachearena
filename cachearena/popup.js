@@ -1,26 +1,33 @@
-(function () {
-  const browser = globalThis.browser || globalThis.chrome;
-  const api = globalThis.__GSMARENA_EXT__ || {};
-  const sendMessage = api.sendMessage || fallbackSendMessage;
+"use strict";
+(() => {
+  // src/shared/browser-compat.ts
+  var browserAPI = globalThis.browser || globalThis.chrome;
+  function sendMessage(message) {
+    return new Promise((resolve, reject) => {
+      browserAPI.runtime.sendMessage(message, (response) => {
+        if (browserAPI.runtime.lastError) {
+          reject(browserAPI.runtime.lastError);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
 
-  const phoneCountEl = document.getElementById("phone-count");
-  const lastSyncEl = document.getElementById("last-sync");
-  const exportBtn = document.getElementById("export-btn");
-  const clearBtn = document.getElementById("clear-btn");
-  const messageEl = document.getElementById("message");
-
+  // src/popup.ts
+  var phoneCountEl = document.getElementById("phone-count");
+  var lastSyncEl = document.getElementById("last-sync");
+  var exportBtn = document.getElementById("export-btn");
+  var clearBtn = document.getElementById("clear-btn");
+  var messageEl = document.getElementById("message");
   loadStats();
-
   exportBtn.addEventListener("click", handleExport);
   clearBtn.addEventListener("click", handleClear);
-
   async function loadStats() {
     try {
       const cache = await sendMessage({ type: "gsmarena-cache-request" });
-
       if (cache && cache.entries) {
-        phoneCountEl.textContent = cache.entries.length;
-
+        phoneCountEl.textContent = String(cache.entries.length);
         if (cache.lastSync) {
           const date = new Date(cache.lastSync);
           lastSyncEl.textContent = formatDate(date);
@@ -30,14 +37,11 @@
       console.error("Failed to load stats", err);
     }
   }
-
   async function handleExport() {
     exportBtn.disabled = true;
     showMessage("Exporting...", "success");
-
     try {
       const result = await sendMessage({ type: "gsmarena-cache-export" });
-
       if (!result || result.ok === false) {
         if (result?.reason === "empty") {
           showMessage("No data to export", "error");
@@ -47,15 +51,12 @@
         exportBtn.disabled = false;
         return;
       }
-
       if (result.mode === "inline") {
         if (!result.csv) {
           showMessage("No data to export", "error");
           exportBtn.disabled = false;
           return;
         }
-
-        // Fallback path when downloads API is unavailable
         const blob = new Blob([result.csv], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -70,7 +71,6 @@
         exportBtn.disabled = false;
         return;
       }
-
       showMessage(`Exported ${result.count || 0} phones`, "success");
     } catch (err) {
       console.error("Export failed", err);
@@ -79,15 +79,12 @@
       exportBtn.disabled = false;
     }
   }
-
   async function handleClear() {
     if (!confirm("Are you sure you want to clear all cached phone data?")) {
       return;
     }
-
     clearBtn.disabled = true;
     showMessage("Clearing cache...", "success");
-
     try {
       await sendMessage({ type: "gsmarena-cache-clear" });
       phoneCountEl.textContent = "0";
@@ -100,43 +97,24 @@
       clearBtn.disabled = false;
     }
   }
-
-  function fallbackSendMessage(message) {
-    return new Promise((resolve, reject) => {
-      browser.runtime.sendMessage(message, (response) => {
-        if (browser.runtime.lastError) {
-          reject(browser.runtime.lastError);
-        } else {
-          resolve(response);
-        }
-      });
-    });
-  }
-
   function showMessage(text, type) {
     messageEl.textContent = text;
     messageEl.className = `message ${type}`;
     messageEl.style.display = "block";
-
     setTimeout(() => {
       messageEl.style.display = "none";
-    }, 3000);
+    }, 3e3);
   }
-
   function formatDate(date) {
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-
+    const now = /* @__PURE__ */ new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 6e4);
     if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
-
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
-
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d ago`;
-
     return date.toLocaleDateString();
   }
 })();
