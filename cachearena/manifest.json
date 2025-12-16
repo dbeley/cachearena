@@ -32,22 +32,9 @@
         "https://www.gsmarena.com/*",
         "http://www.gsmarena.com/*"
       ],
-      "js": [
-        "shared/normalize.js",
-        "shared/config.js",
-        "shared/browser-compat.js",
-        "shared/async-utils.js",
-        "shared/dom-utils.js",
-        "content/data-extract.js"
-      ],
+      "js": ["content/data-extract.js"],
       "run_at": "document_idle"
     }
   ],
-  "web_accessible_resources": [
-    "shared/normalize.js",
-    "shared/config.js",
-    "shared/async-utils.js",
-    "shared/browser-compat.js",
-    "shared/dom-utils.js"
-  ]
+  "web_accessible_resources": []
 }

@@ -20,17 +20,20 @@ All JavaScript source code has been migrated to TypeScript:
 #### Created Centralized Browser Compatibility Module (`src/shared/browser-compat.ts`)
 
 Before: Cross-browser compatibility code was duplicated across multiple files:
+
 ```javascript
 // Repeated in background.js, popup.js, content scripts, etc.
 const browser = globalThis.browser || globalThis.chrome;
 ```
 
 After: Single source of truth for browser APIs:
+
 ```typescript
 import { browserAPI, storage, sendMessage } from "./shared/browser-compat";
 ```
 
 This module provides:
+
 - Unified browser API access
 - Promise-based storage wrapper
 - Message sending utilities
@@ -39,6 +42,7 @@ This module provides:
 #### Consolidated Global API Pattern
 
 Before: Each shared utility file had its own global initialization:
+
 ```javascript
 (function (global) {
   const api = (global.__GSMARENA_EXT__ = global.__GSMARENA_EXT__ || {});
@@ -47,6 +51,7 @@ Before: Each shared utility file had its own global initialization:
 ```
 
 After: Clean ES6 module exports with no global state:
+
 ```typescript
 export function normalize(text: string): string { ... }
 export function keyFor(brand: string, model: string): string { ... }
@@ -65,6 +70,7 @@ The separate `runtime-utils.js` file has been merged into `browser-compat.ts`, e
 ### 4. Improved Type Safety
 
 Created comprehensive type definitions in `src/types.ts`:
+
 - `PhoneRecord` - Structure for phone data
 - `Cache` - Cache storage structure
 - `Settings` - User settings structure
@@ -100,11 +106,8 @@ cachearena/
 ### Commands
 
 ```bash
-# Compile TypeScript to JavaScript
+# Compile and bundle TypeScript to JavaScript
 npm run compile
-
-# Watch mode for development
-npm run watch
 
 # Build extension packages (auto-compiles first)
 npm run build
@@ -119,9 +122,19 @@ npm run format
 ### Build Flow
 
 1. `npm run build` triggers `prebuild` hook
-2. `prebuild` runs `npm run compile` to compile TypeScript
-3. Compiled JavaScript is output to `cachearena/` directory
-4. `build-extension.sh` packages the `cachearena/` directory into `.xpi` and `.zip` files
+2. `prebuild` runs `npm run compile` to compile and bundle TypeScript with esbuild
+3. esbuild bundles each entry point (background, popup, content script) into a single IIFE
+4. Compiled JavaScript is output to `cachearena/` directory
+5. `build-extension.sh` packages the `cachearena/` directory into `.xpi` and `.zip` files
+
+### Bundling
+
+The project uses **esbuild** to bundle TypeScript into single JavaScript files:
+
+- Each script (background, popup, content) is bundled separately
+- All dependencies are inlined, eliminating the need for separate shared files
+- Output format is IIFE (Immediately Invoked Function Expression) for manifest v2 compatibility
+- No module loader needed - scripts work natively in browser extensions
 
 ## Development Workflow
 
@@ -133,17 +146,21 @@ npm run format
 ## Code Quality Metrics
 
 ### Before Migration
+
 - **JavaScript files**: 7 source files with duplicated patterns
 - **Lines of code**: ~800 LOC with significant duplication
 - **Type safety**: None (plain JavaScript)
 - **Linting warnings**: 2 unused variables
 
 ### After Migration
+
 - **TypeScript files**: 9 well-organized modules
 - **Lines of code**: ~424 LOC of TypeScript (cleaner, more maintainable)
+- **Bundled output**: 3 bundled JavaScript files (~24 KB total)
 - **Type safety**: Full type coverage with interfaces
 - **Linting warnings**: 12 warnings (only `any` types, which are acceptable for browser APIs)
-- **Code duplication**: Significantly reduced through centralized utilities
+- **Code duplication**: Significantly reduced through centralized utilities and bundling
+- **Build tool**: esbuild for fast compilation and bundling
 
 ## Breaking Changes
 
@@ -151,14 +168,17 @@ None for end users. The extension functionality remains identical.
 
 ## Developer Notes
 
-- The `cachearena/` directory now contains **compiled output only**
+- The `cachearena/` directory now contains **bundled output only**
 - Never edit `.js` files in `cachearena/` directly - edit `.ts` files in `src/` instead
 - The `.gitignore` excludes compiled `.js` files but they are included in distribution packages
-- ESLint is configured to lint both TypeScript (in `src/`) and JavaScript (for legacy compatibility)
+- ESLint is configured to lint TypeScript source files
+- esbuild bundles all dependencies into single files for each entry point
+- Watch mode is available with `npm run watch` for development (if configured in build.mjs)
 
 ## Future Improvements
 
 Potential areas for further enhancement:
+
 1. Reduce remaining `any` types by creating more specific browser API type definitions
 2. Add unit tests for utility functions
 3. Consider using a bundler (e.g., esbuild, rollup) to reduce file count
