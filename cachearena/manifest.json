@@ -35,21 +35,19 @@
       "js": [
         "shared/normalize.js",
         "shared/config.js",
-        "shared/runtime-utils.js",
+        "shared/browser-compat.js",
         "shared/async-utils.js",
         "shared/dom-utils.js",
-        "content/data-sync.js",
         "content/data-extract.js"
       ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
-    "content/data-sync.js",
     "shared/normalize.js",
     "shared/config.js",
     "shared/async-utils.js",
-    "shared/runtime-utils.js",
+    "shared/browser-compat.js",
     "shared/dom-utils.js"
   ]
 }

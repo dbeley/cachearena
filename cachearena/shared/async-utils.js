@@ -1,20 +1,23 @@
-(function (global) {
-  const api = (global.__GSMARENA_EXT__ = global.__GSMARENA_EXT__ || {});
-
-  function delay(ms) {
+/**
+ * Async utilities for timing and data parsing
+ */
+/**
+ * Delay execution for a specified number of milliseconds
+ */
+export function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  function safeJsonParse(raw, fallback = null) {
-    if (!raw) return fallback;
+}
+/**
+ * Safely parse JSON with fallback value
+ */
+export function safeJsonParse(raw, fallback = null) {
+    if (!raw)
+        return fallback;
     try {
-      return JSON.parse(raw);
-    } catch (err) {
-      console.warn("[async-utils] unable to parse JSON", err);
-      return fallback;
+        return JSON.parse(raw);
     }
-  }
-
-  api.delay = delay;
-  api.safeJsonParse = safeJsonParse;
-})(typeof window !== "undefined" ? window : this);
+    catch (err) {
+        console.warn("[async-utils] unable to parse JSON", err);
+        return fallback;
+    }
+}
